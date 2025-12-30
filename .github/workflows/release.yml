@@ -1,0 +1,48 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build Release Binary
+        run: swift build -c release
+
+      - name: Create Universal Binary (arm64 + x86_64)
+        run: |
+          # Build for both architectures
+          swift build -c release --arch arm64
+          swift build -c release --arch x86_64
+
+          # Create universal binary
+          mkdir -p dist
+          lipo -create \
+            .build/arm64-apple-macosx/release/contacts-helper \
+            .build/x86_64-apple-macosx/release/contacts-helper \
+            -output dist/contacts-helper
+
+          # Make executable
+          chmod +x dist/contacts-helper
+
+      - name: Generate SHA256 Checksum
+        run: |
+          cd dist
+          shasum -a 256 contacts-helper > contacts-helper.sha256
+          cat contacts-helper.sha256
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/contacts-helper
+            dist/contacts-helper.sha256
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
